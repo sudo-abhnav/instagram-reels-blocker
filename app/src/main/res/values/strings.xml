@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Reels Blocker</string>
+    <string name="accessibility_service_label">Instagram Reels Blocker</string>
+    <string name="accessibility_service_description">Watches Instagram and presses Back when the main Reels tab or feed is opened. Reels shared inside Direct Message chats are left alone.</string>
+    <string name="title">Instagram Reels Blocker</string>
+    <string name="subtitle">Block the main Reels tab. Reels sent in DMs still play.</string>
+    <string name="switch_label">Block Reels feed</string>
+    <string name="open_accessibility">Open Accessibility settings</string>
+    <string name="status_service_on">Accessibility service is on</string>
+    <string name="status_service_off">Accessibility service is off — enable it in Settings</string>
+    <string name="status_blocker_paused">Blocker is paused. Reels are not blocked.</string>
+    <string name="hint_enable_service">Turn the switch on, then enable “Instagram Reels Blocker” in Accessibility settings.</string>
+    <string name="how_it_works">How it works</string>
+    <string name="how_it_works_body">When Instagram’s main Reels tab is open, the service issues a Back action so you leave that feed. Reels inside a Direct chat thread are not blocked.\n\nAfter installing an update, turn this service off and on again in Accessibility settings. On Samsung, you may also need App info → three dots → Allow restricted settings.</string>
+</resources>
