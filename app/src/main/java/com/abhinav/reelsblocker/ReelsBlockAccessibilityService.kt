@@ -11,9 +11,12 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 
+typealias InstagramBlockerService = ReelsBlockAccessibilityService
+
 /**
  * Blocks Instagram's main Reels tab/feed with GLOBAL_ACTION_BACK.
  * Reels opened inside a Direct Message thread are left alone.
+ * Instagram Stories are explicitly ignored and allowed to play.
  */
 class ReelsBlockAccessibilityService : AccessibilityService() {
 
@@ -96,7 +99,7 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
     private fun evaluate(root: AccessibilityNodeInfo) {
         val snapshot = scan(root)
         val now = SystemClock.uptimeMillis()
-        if (snapshot.inDmThread) lastDmThreadAtMs = now
+        if (snapshot.inDmThread && !snapshot.isStory) lastDmThreadAtMs = now
 
         val recentlyInDm = now - lastDmThreadAtMs < DM_STICKY_MS
         val allowBecauseDm = snapshot.inDmThread || (recentlyInDm && !snapshot.hasMainChrome)
@@ -105,6 +108,12 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
             Log.d(TAG, "allow DM reel/thread $snapshot")
             return
         }
+
+        if (snapshot.isStory) {
+            Log.d(TAG, "allow Story $snapshot")
+            return
+        }
+
         if (!snapshot.isMainReels) return
 
         if (now - lastBackAtMs < BACK_COOLDOWN_MS) return
@@ -115,6 +124,7 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
 
     private fun scan(root: AccessibilityNodeInfo): Snapshot {
         var inDmThread = false
+        var isStory = false
         var hasHome = false
         var hasSearch = false
         var hasProfile = false
@@ -122,10 +132,12 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
         var visibleClipsPager = false
         var visibleClipsRoot = false
 
+        isStory = STORY_VIEW_ID_HINTS.any { hasVisibleViewId(root, it) }
+
         visibleClipsPager = hasVisibleViewId(root, "clips_viewer_view_pager")
         visibleClipsRoot = hasVisibleViewId(root, "root_clips_layout") ||
-            hasVisibleViewId(root, "reel_viewer_root") ||
-            hasVisibleViewId(root, "clips_action_bar")
+            hasVisibleViewId(root, "clips_action_bar") ||
+            hasVisibleViewId(root, "clips_video_container")
 
         walk(root) { node ->
             if (!node.isVisibleToUser) return@walk
@@ -135,11 +147,25 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
             val hint = node.hintText?.toString()?.lowercase().orEmpty()
             val combined = "$id $desc $text $hint"
 
-            if (DM_THREAD_ID_HINTS.any { id.contains(it) } && node.isOnScreen()) {
-                inDmThread = true
+            if (node.isOnScreen()) {
+                if (id.startsWith("reel_viewer") ||
+                    id.contains("segmented_progress_bar") ||
+                    id.contains("story_progress_bar") ||
+                    desc.startsWith("story by") ||
+                    desc.contains("story by") ||
+                    desc.contains("story of")
+                ) {
+                    isStory = true
+                }
             }
-            if (DM_THREAD_TEXT_HINTS.any { combined.contains(it) } && node.isOnScreen()) {
-                inDmThread = true
+
+            if (!isStory) {
+                if (DM_THREAD_ID_HINTS.any { id.contains(it) } && node.isOnScreen()) {
+                    inDmThread = true
+                }
+                if (DM_THREAD_TEXT_HINTS.any { combined.contains(it) } && node.isOnScreen()) {
+                    inDmThread = true
+                }
             }
 
             if (node.isOnScreen()) {
@@ -160,6 +186,7 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
 
         return Snapshot(
             inDmThread = inDmThread,
+            isStory = isStory,
             hasMainChrome = hasHome || hasSearch || hasProfile,
             reelsTabSelected = reelsTabSelected,
             visibleClipsSurface = visibleClipsPager || visibleClipsRoot,
@@ -188,12 +215,13 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
 
     private data class Snapshot(
         val inDmThread: Boolean,
+        val isStory: Boolean,
         val hasMainChrome: Boolean,
         val reelsTabSelected: Boolean,
         val visibleClipsSurface: Boolean,
     ) {
         val isMainReels: Boolean
-            get() = visibleClipsSurface || reelsTabSelected
+            get() = !isStory && (visibleClipsSurface || reelsTabSelected)
     }
 
     private companion object {
@@ -203,6 +231,22 @@ class ReelsBlockAccessibilityService : AccessibilityService() {
         const val POLL_MS = 400L
         const val DM_STICKY_MS = 2_500L
         const val IG_POLL_KEEPALIVE_MS = 8_000L
+
+        val STORY_VIEW_ID_HINTS = listOf(
+            "reel_viewer_root",
+            "reel_viewer_container",
+            "reel_viewer_view_pager",
+            "reel_viewer_image_view",
+            "reel_item_progress_bar",
+            "segmented_progress_bar",
+            "reel_viewer_progress_bar",
+            "reel_viewer_title",
+            "reel_viewer_timestamp",
+            "reel_viewer_header",
+            "reel_viewer_media_container",
+            "reel_viewer_tall_shadow",
+            "story_progress_bar",
+        )
 
         val DM_THREAD_ID_HINTS = listOf(
             "direct_thread",
